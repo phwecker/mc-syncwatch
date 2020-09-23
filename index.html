@@ -1,0 +1,200 @@
+<html>
+
+<head>
+  <title>SyncPlay Demo</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.1.3/dist/css/bootstrap.min.css">
+    <link href="https://vjs.zencdn.net/7.8.4/video-js.css" rel="stylesheet" />
+    <script src="https://vjs.zencdn.net/ie8/1.1.2/videojs-ie8.min.js"></script>
+<script>
+    window.apiBaseUrl = 'http://localhost:7071';
+  </script>
+  <style>
+    .slide-fade-enter-active, .slide-fade-leave-active {
+      transition: all 1s ease;
+    }
+    .slide-fade-enter, .slide-fade-leave-to {
+      height: 0px;
+      overflow-y: hidden;
+      opacity: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <p>&nbsp;</p>
+  <div id="app" class="container">
+    <h3>SyncPlay Demo</h3>
+    <div class="row" v-if="ready">
+      <div class="signalr-demo col-sm">
+        <hr />
+        <form v-on:submit.prevent="sendNewMessage">
+          <input width="320" type="text" v-model="newMessage" id="message-box" class="form-control" placeholder="Type message here..." />
+        </form>
+      </div>
+    </div>
+    <div class="row" v-if="!ready">
+      <div class="col-sm">
+        <div>Loading...</div>
+      </div>
+    </div>
+    <div v-if="ready">
+  <video ref="player" id="player" class="video-js" controls preload="auto" width="320" height="264" poster="https://media.gettyimages.com/videos/loopable-filming-camera-video-id1026164248?s=640x640"
+    data-setup="{}">
+<!-- https://vjs.zencdn.net/v/oceans.mp4 -->
+    <source src="https://vjs.zencdn.net/v/oceans.mp4" type="video/mp4" />
+
+    <p class="vjs-no-js">
+      To view this video please enable JavaScript, and consider upgrading to a
+      web browser that
+      <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>
+    </p>
+  </video>
+      <transition-group name="slide-fade" tag="div">
+        <div class="row" v-for="message in messages" v-bind:key="message.id">
+          <div class="col-sm">
+            <hr />
+            <div>
+              <div style="display: inline-block; padding-left: 12px;">
+                <div>
+                  <span class="text-info small"><strong>{{ message.channel }}</strong></span>
+                </div>
+                <div>
+                  {{ message.message }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition-group>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.5.17/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@aspnet/signalr@1.0.3/dist/browser/signalr.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios@0.18.0/dist/axios.min.js"></script>
+  <script src="https://vjs.zencdn.net/7.8.4/video.js"></script>
+
+  <script>
+
+    const data = {
+      channelName: '',
+      newMessage: '',
+      messages: [],
+      ready: false
+    };
+
+    const app = new Vue({
+      el: '#app',
+      data: data,
+      mounted() {
+      },
+      methods: {
+        sendNewMessage: function () {
+          sendMessage(this.channelName, this.newMessage);
+          this.newMessage = '';
+        } 
+      }
+    });
+
+    const apiBaseUrl = prompt('Enter the Azure Function app base URL', window.apiBaseUrl);
+
+    data.channelName = prompt("Enter your Channel Name");
+    if (!data.channelName) {
+      alert("No channel name entered. Reload page and try again.");
+      throw "No channel name entered";
+    } else {
+
+    getConnectionInfo().then(info => {
+      // make compatible with old and new SignalRConnectionInfo
+      info.accessToken = info.accessToken || info.accessKey;
+      info.url = info.url || info.endpoint;
+
+      data.ready = true;
+      const options = {
+        accessTokenFactory: () => info.accessToken
+      };
+
+      const connection = new signalR.HubConnectionBuilder()
+        .withUrl(info.url, options)
+        .configureLogging(signalR.LogLevel.Information)
+        .build();
+
+      connection.on(data.channelName, newMessage);
+      connection.onclose(() => console.log('disconnected'));
+
+      console.log('connecting...');
+      connection.start()
+        .then(() => console.log('connected!'))
+        .catch(console.error);
+
+    }).catch(alert);
+
+    function getAxiosConfig() {
+      const config = {
+        headers: {}
+      };
+      return config;
+    }
+
+    function getConnectionInfo() {
+      return axios.post(`${apiBaseUrl}/api/negotiate`, null, getAxiosConfig())
+        .then(resp => resp.data);
+    }
+
+    function sendMessage(sender, messageText) {
+      var myPlayer = videojs('player');
+      let command = messageText.split("::");
+      switch (command[0]) {
+        case "play": 
+        messageText = "play::" + myPlayer.currentTime() 
+        break;
+                case "sync":
+                  switch (command[1]) { 
+                    case "time" : 
+          messageText = "sync::" + myPlayer.currentTime();
+          break;
+          case "src" :
+            messageText = myPlayer.src;
+          }
+          break;
+      }
+      console.log("send ", sender, messageText);
+
+      return axios.post(`${apiBaseUrl}/api/messages`, {
+        channel: sender,
+        message: messageText
+      }, getAxiosConfig()).then(resp => {console.log(resp.data);resp.data});
+    }
+
+    let counter = 0;
+    function newMessage(message) {
+      message.id = counter++; // vue transitions need an id
+      console.log(message)
+      let command = message.message.split("::");
+      var myPlayer = videojs('player');
+
+      switch (command[0]) {
+        case 'poster' : 
+              document.getElementById("player").poster = command[1]
+        break;
+        case 'src':
+          document.getElementById("player").src = command[1]
+          break;
+        case 'sync':
+          if (command[1]) { myPlayer.currentTime(command[1]) }
+          break;          
+        case 'play':
+          if (command[1]) {myPlayer.currentTime(command[1])}
+          myPlayer.play();
+          break;
+        case 'pause':
+          myPlayer.pause();
+          break;
+      }   
+      data.messages.unshift(message);
+    }
+    }
+  </script>
+</body>
+
+</html>

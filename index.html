@@ -39,9 +39,12 @@
     </div>
     <div v-if="ready">
   <video ref="player" id="player" class="video-js" controls preload="auto" width="320" height="264" poster="https://media.gettyimages.com/videos/loopable-filming-camera-video-id1026164248?s=640x640"
-    data-setup="{}">
-<!-- https://vjs.zencdn.net/v/oceans.mp4 -->
-    <source src="https://vjs.zencdn.net/v/oceans.mp4" type="video/mp4" />
+    data-setup="{}" src="https://vjs.zencdn.net/v/oceans.mp4">
+<!-- 
+https://vjs.zencdn.net/v/oceans.mp4 
+http://d2zihajmogu5jn.cloudfront.net/elephantsdream/ed_hd.mp4
+-->
+    <!--source src="http://d2zihajmogu5jn.cloudfront.net/elephantsdream/ed_hd.mp4" /-->
 
     <p class="vjs-no-js">
       To view this video please enable JavaScript, and consider upgrading to a
@@ -178,7 +181,7 @@
               document.getElementById("player").poster = command[1]
         break;
         case 'src':
-          document.getElementById("player").src = command[1]
+          myPlayer.src(command[1])
           break;
         case 'sync':
           if (command[1]) { myPlayer.currentTime(command[1]) }

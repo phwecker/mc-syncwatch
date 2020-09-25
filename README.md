@@ -1,6 +1,6 @@
 # mc-syncwatch
 
-This is a sample on how to create synchronized playback using VideoJS and Azure SignalR Service as the communiation channel. It is based on the azure SignalR Service Chat example.
+This is a sample on how to create synchronized playback using Youtube Embedded Player (video.js is work in progress) and Azure SignalR Service as the communiation channel. It is based on the azure SignalR Service Chat example.
 
 You need to deploy the Azure Functions code and then host the HTML on e.g. Azure Storage, or run the entire thing locally in VSCode for testing.
 
@@ -14,11 +14,10 @@ During startup it will ask you also for a URL to the API, this is where you are 
 
 Implemented commands :
 
-- src::<link to the video> - thsi will set the video source
-- play - this will initiate play (if will automatically add the timecode fo the initiators player and sync all other players to it)
-- pause - this will initiate pause
-- sync::time - will sync the timecode fo the initiator to all clients
-- sync::src - will sync the source to all clients
+- yt::src::<YouTube Video Id> - thsi will set the video source
+- yt::play[::<startSecond] - this will initiate play (if will automatically add the timecode fo the initiators player and sync all other players to it)
+- yt::pause - this will initiate pause
+- yt::sync::time - will sync the timecode fo the initiator to all clients
 
 # Good to know
 

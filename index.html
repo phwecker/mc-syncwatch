@@ -38,21 +38,21 @@
       </div>
     </div>
     <div v-if="ready">
-  <video ref="player" id="player" class="video-js" controls preload="auto" width="320" height="264" poster="https://media.gettyimages.com/videos/loopable-filming-camera-video-id1026164248?s=640x640"
-    data-setup="{}" src="https://vjs.zencdn.net/v/oceans.mp4">
-<!-- 
-https://vjs.zencdn.net/v/oceans.mp4 
-http://d2zihajmogu5jn.cloudfront.net/elephantsdream/ed_hd.mp4
--->
-    <!--source src="http://d2zihajmogu5jn.cloudfront.net/elephantsdream/ed_hd.mp4" /-->
+          <div id="player"></div>
 
+  <!-- <video ref="player" id="player" class="video-js" controls preload="auto" width="320" height="264" poster="https://media.gettyimages.com/videos/loopable-filming-camera-video-id1026164248?s=640x640"
+    data-setup="{}" src="https://vjs.zencdn.net/v/oceans.mp4">
     <p class="vjs-no-js">
       To view this video please enable JavaScript, and consider upgrading to a
       web browser that
       <a href="https://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a>
     </p>
-  </video>
-      <transition-group name="slide-fade" tag="div">
+  </video> -->
+<!-- 
+https://vjs.zencdn.net/v/oceans.mp4 
+http://d2zihajmogu5jn.cloudfront.net/elephantsdream/ed_hd.mp4
+-->
+  <transition-group name="slide-fade" tag="div">
         <div class="row" v-for="message in messages" v-bind:key="message.id">
           <div class="col-sm">
             <hr />
@@ -76,28 +76,173 @@ http://d2zihajmogu5jn.cloudfront.net/elephantsdream/ed_hd.mp4
   <script src="https://cdn.jsdelivr.net/npm/@aspnet/signalr@1.0.3/dist/browser/signalr.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/axios@0.18.0/dist/axios.min.js"></script>
   <script src="https://vjs.zencdn.net/7.8.4/video.js"></script>
+<script src="https://www.youtube.com/player_api"></script>
 
   <script>
 
     const data = {
-      channelName: '',
-      newMessage: '',
-      messages: [],
-      ready: false
-    };
+        channelName: '',
+        newMessage: '',
+        messages: [],
+        ready: false
+      };
 
-    const app = new Vue({
-      el: '#app',
-      data: data,
-      mounted() {
-      },
-      methods: {
-        sendNewMessage: function () {
-          sendMessage(this.channelName, this.newMessage);
-          this.newMessage = '';
-        } 
+
+  var player;
+  var done = false;
+
+    function getAxiosConfig() {
+        const config = {
+          headers: {}
+        };
+        return config;
       }
-    });
+
+      function getConnectionInfo() {
+        return axios.post(`${apiBaseUrl}/api/negotiate`, null, getAxiosConfig())
+          .then(resp => resp.data);
+      }
+
+      function sendMessage(sender, messageText) {
+        let command = messageText.split("::"); 
+        // getCurrentTime
+        switch (command[0]) {
+          case 'yt' : {
+            switch (command[1]) {
+              case "play":
+                messageText = messageText+"::" + player.getCurrentTime()
+                break;
+              case "sync":
+                switch (command[2]) {
+                  case "time":
+                    messageText = messageText+"::" + player.getCurrentTime();
+                    break;
+                  case "src":
+                    messageText = messageText + "::" + player.getVideoUrl();
+                }
+                break;
+            }
+            break;
+          }
+          case 'vjs' : {
+            switch (command[1]) {
+              case "play": 
+              messageText = "play::" + myPlayer.currentTime() 
+              break;
+                      case "sync":
+                        switch (command[1]) { 
+                          case "time" : 
+                messageText = "sync::" + myPlayer.currentTime();
+                break;
+            }
+            break;
+            }
+                }
+        console.log("outgoing : ", messageText);
+
+        return axios.post(`${apiBaseUrl}/api/messages`, {
+          channel: sender,
+          message: messageText
+        }, getAxiosConfig()).then(resp => {console.log(resp.data);resp.data});
+      }
+
+      let counter = 0;
+
+      function newMessage(message) {
+        message.id = counter++; // vue transitions need an id
+        console.log("incoming :", message)
+        let command = message.message.split("::");
+        var myPlayer = videojs('player');
+
+        switch (command[0]) {
+          case 'yt' : {
+          switch (command[1]) {
+              case 'poster':
+                break;
+              case 'large' : 
+              player.setSize(640, 480)
+              break;
+              case 'src':
+              player.loadVideoById(command[2],0);
+                break;
+              case 'sync':
+                switch (command[2]) {
+                  case 'time':
+                    player.seekTo(command[3]);
+                    break;
+                }
+                break;
+              case 'play':
+                if (command[2]) {
+                  player.seekTo(command[2]);
+                  player.playVideo();
+                } else {
+                  player.playVideo();
+                }
+                break;
+              case 'pause':
+                player.pauseVideo();
+                break;
+            }  
+          break;
+          }
+          case 'vjs': {
+            switch (command[1]) {
+              case 'poster':
+                document.getElementById("player").poster = command[2]
+                break;
+              case 'src':
+                myPlayer.src(command[2])
+                break;
+              case 'sync':
+                if (command[2]) { myPlayer.currentTime(command[2]) }
+                break;
+              case 'play':
+                if (command[2]) { myPlayer.currentTime(command[2]) }
+                myPlayer.play();
+                break;
+              case 'pause':
+                myPlayer.pause();
+                break;
+            }  
+            break;
+            }
+        }
+        data.messages.unshift(message);
+      }
+
+
+  function onPlayerReady(event) {
+    console.log('YouTube ready')
+    event.target.playVideo();
+  }
+
+  function onPlayerStateChange(event) {
+            console.log('yt::event', event.data)
+
+    switch (event.data) {
+      case YT.PlayerState.PLAYING :
+        console.log('yt::playing')
+        // const sendIt = sendMessage(data.channelName, 'yt::sync::time')
+      break;
+    }
+  }
+
+  function stopVideo() {
+    player.stopVideo();
+  }
+
+          function onYouTubeIframeAPIReady() {
+            player = new YT.Player('player', {
+              height: '390',
+              width: '640',
+              videoId: '9xaYZM93oK4',
+              events: {
+                'onReady': onPlayerReady,
+                'onStateChange': onPlayerStateChange
+              }
+            });
+          }
 
     const apiBaseUrl = prompt('Enter the Azure Function app base URL', window.apiBaseUrl);
 
@@ -105,97 +250,56 @@ http://d2zihajmogu5jn.cloudfront.net/elephantsdream/ed_hd.mp4
     if (!data.channelName) {
       alert("No channel name entered. Reload page and try again.");
       throw "No channel name entered";
-    } else {
+    } else 
+    {
 
-    getConnectionInfo().then(info => {
-      // make compatible with old and new SignalRConnectionInfo
-      info.accessToken = info.accessToken || info.accessKey;
-      info.url = info.url || info.endpoint;
-
-      data.ready = true;
-      const options = {
-        accessTokenFactory: () => info.accessToken
-      };
-
-      const connection = new signalR.HubConnectionBuilder()
-        .withUrl(info.url, options)
-        .configureLogging(signalR.LogLevel.Information)
-        .build();
-
-      connection.on(data.channelName, newMessage);
-      connection.onclose(() => console.log('disconnected'));
-
-      console.log('connecting...');
-      connection.start()
-        .then(() => console.log('connected!'))
-        .catch(console.error);
-
-    }).catch(alert);
-
-    function getAxiosConfig() {
-      const config = {
-        headers: {}
-      };
-      return config;
-    }
-
-    function getConnectionInfo() {
-      return axios.post(`${apiBaseUrl}/api/negotiate`, null, getAxiosConfig())
-        .then(resp => resp.data);
-    }
-
-    function sendMessage(sender, messageText) {
-      var myPlayer = videojs('player');
-      let command = messageText.split("::");
-      switch (command[0]) {
-        case "play": 
-        messageText = "play::" + myPlayer.currentTime() 
-        break;
-                case "sync":
-                  switch (command[1]) { 
-                    case "time" : 
-          messageText = "sync::" + myPlayer.currentTime();
-          break;
-          case "src" :
-            messageText = myPlayer.src;
+      const app = new Vue({
+        el: '#app',
+        data: data,
+        mounted() {
+        },
+        methods: {
+          sendNewMessage: function () {
+            sendMessage(this.channelName, this.newMessage);
+            this.newMessage = '';
           }
-          break;
-      }
-      console.log("send ", sender, messageText);
+        }
+      });
 
-      return axios.post(`${apiBaseUrl}/api/messages`, {
-        channel: sender,
-        message: messageText
-      }, getAxiosConfig()).then(resp => {console.log(resp.data);resp.data});
-    }
+      getConnectionInfo()
+      .then(info => {
 
-    let counter = 0;
-    function newMessage(message) {
-      message.id = counter++; // vue transitions need an id
-      console.log(message)
-      let command = message.message.split("::");
-      var myPlayer = videojs('player');
+        var tag = document.createElement('script');
 
-      switch (command[0]) {
-        case 'poster' : 
-              document.getElementById("player").poster = command[1]
-        break;
-        case 'src':
-          myPlayer.src(command[1])
-          break;
-        case 'sync':
-          if (command[1]) { myPlayer.currentTime(command[1]) }
-          break;          
-        case 'play':
-          if (command[1]) {myPlayer.currentTime(command[1])}
-          myPlayer.play();
-          break;
-        case 'pause':
-          myPlayer.pause();
-          break;
-      }   
-      data.messages.unshift(message);
-    }
+        tag.src = "https://www.youtube.com/iframe_api";
+
+        var firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+          // make compatible with old and new SignalRConnectionInfo
+          info.accessToken = info.accessToken || info.accessKey;
+          info.url = info.url || info.endpoint;
+
+          data.ready = true;
+          const options = {
+            accessTokenFactory: () => info.accessToken
+          };
+
+          const connection = new signalR.HubConnectionBuilder()
+            .withUrl(info.url, options)
+            .configureLogging(signalR.LogLevel.Information)
+            .build();
+
+          connection.on(data.channelName, newMessage);
+          connection.onclose(() => console.log('disconnected'));
+
+          console.log('connecting...');
+          connection.start()
+            .then(() => console.log('connected!'))
+            .catch(console.error);
+
+        })
+        .catch(alert);
     }
   </script>
 </body>
